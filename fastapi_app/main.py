@@ -2,18 +2,19 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException, status
 from celery.result import AsyncResult
 import httpx
 from pydantic import BaseModel
+from typing import Optional
 
 app = FastAPI()
 
-DJANGO_API_URL = "http://127.0.0.1:8000//" 
+DJANGO_API_URL = "http://127.0.0.1:8001/" 
 
-class TaskRequest(BaseModel):
-    owner: str
-    repo: str
-    token: str
+class AnalyzePRRequest(BaseModel):
+    repo_url: str
+    pr_number: int
+    github_token: Optional[str] = None
 
 @app.post("/start_task/")
-async def start_task_endpoint(task_request: TaskRequest):
+async def start_task_endpoint(task_request: AnalyzePRRequest):
     """
     Trigger the task in Django and return the task ID.
     """
@@ -21,17 +22,16 @@ async def start_task_endpoint(task_request: TaskRequest):
         response = await client.post(
             f"{DJANGO_API_URL}/start_task/",
             data={
-                "owner": task_request.owner,
-                "repo": task_request.repo,
-                "token": task_request.token,
-                
+                "repo_url": task_request.repo_url,
+                "pr_number": task_request.pr_number,
+                "github_token": task_request.github_token,
+
             }
         )
-        if response.status_code == 200:
-            task_id = response.json().get("task_id")
-            return {"task_id": task_id, "status": "Task started"}
-        else:
+        if response.status_code != 200:
             return {"error": "Failed to start task", "details": response.text}
+        task_id = response.json().get("task_id")
+        return {"task_id": task_id, "status": "Task started"}
 
 @app.get("/task_status/{task_id}/")
 async def task_status_endpoint(task_id: str):
@@ -39,5 +39,8 @@ async def task_status_endpoint(task_id: str):
     Check the status of the task by making a request to Django.
     """
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{DJANGO_API_URL}/task_status/{task_id}/")
+        response = await client.get(f"{DJANGO_API_URL}/task_status_view/{task_id}/")
+        print(response)
         return response.json()
+    
+    return {"message": "something went wrong",}

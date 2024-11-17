@@ -1,0 +1,2 @@
+uvicorn main:app --reload
+celery -A django_app worker -l info -P eventlet
